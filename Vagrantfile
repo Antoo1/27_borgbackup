@@ -1,6 +1,5 @@
 # -*- mode: ruby -*-
 # vim: set ft=ruby :
-home = ENV['HOME']
 ENV["LC_ALL"] = "en_US.UTF-8"
 
 MACHINES = {
@@ -18,17 +17,12 @@ MACHINES = {
               :ip => "192.168.56.112",
               :disks => {
                 :sata1 => {
-                    :dfile => home + '/disk_d/vms/sata1.vdi',
                     :size => "1G",
                     :port => 1
                 },
             },
           },
 }
-
-ssh_key = `ssh-keygen -t ed25519 -f /tmp/id_ed25519 -N ""`
-public_key = File.read("/tmp/id_ed25519.pub")
-private_key = File.read("/tmp/id_ed25519")
   
 Vagrant.configure("2") do |config|
   MACHINES.each do |boxname, boxconfig|
@@ -38,49 +32,35 @@ Vagrant.configure("2") do |config|
       box.vm.host_name = boxname
       box.vm.box = boxconfig[:box_name]
       box.vm.box_version = boxconfig[:box_version]
-      box.vm.host_name = boxname.to_s
+
+      box.vm.provision "shell", inline: <<-SHELL
+        echo '-------------------------edit ssh start'
+        sed -i 's/^PasswordAuthentication.*$/PasswordAuthentication no/' $(grep -r 'PasswordAuthentication' /etc/ssh/ | awk '{print $1}' FS=':' | uniq)
+          echo '-------------------------edited ssh'
+          systemctl restart sshd.service
+        SHELL
 
       box.vm.provider "libvirt" do |vm|
         vm.memory = boxconfig[:memory]
         vm.cpus = boxconfig[:cpus]
         
-        box.vm.provision "shell", inline: <<-SHELL
-          sed -i 's/^PasswordAuthentication.*$/PasswordAuthentication no/' $(grep -r 'PasswordAuthentication' /etc/ssh/ | awk '{print $1}' FS=':' | uniq)
-          systemctl restart sshd.service
-          # useradd -m -s /bin/bash borg
-          # echo borg:'Otus2022!' | sudo chpasswd
-          # groupadd -f admin
-          # usermod borg -a -G admin && usermod root -a -G admin && usermod vagrant -a -G admin
-          # mkdir /home/borg/.ssh
-          # echo '#{private_key}' >> /home/borg/.ssh/id_ed25519
-          # chown borg /home/borg/.ssh/ 
-          # chmod 700 /home/borg/.ssh/
-        SHELL
-        
         boxconfig[:disks].each do |dname, dconf|
-          vm.storage 
-            :file, 
-            :size=> dconf[:size], 
-            :path => dconf[:path], 
-            :device => "sdb", 
-            :allow_existing => true,
-            :bus => "sata"
+          vm.storage :file, :size=> dconf[:size], :device => "sda", :allow_existing => true, :bus => "sata"
 
           box.vm.provision "shell", inline: <<-SHELL
-            dd if=/dev/zero of=/dev/vdb bs=1M count=1024
-            mkfs.ext4 /dev/vdb
+            echo '-------------------------mount start'
             mkdir -p /var/backup
-            mount /dev/sdb /var/backup
-            # chown borg:borg /var/backup/
-            # echo '#{public_key}' >> /home/borg/.ssh/authorized_keys
-            # chmod 600 /home/borg/.ssh/authorized_keys
+            dd if=/dev/zero of=/dev/sda bs=4M 2>/dev/null
+            mkfs.ext4 /dev/sda 2>/dev/null
+            mount /dev/sda /var/backup
+            echo '-------------------------mounted'
           SHELL
         end
       end
-      box.vm.provision "ansible" do |ansible|
-        ansible.playbook = "playbook.yml"
-        ansible.become = "true"
-      end
+      # box.vm.provision "ansible" do |ansible|
+      #   ansible.playbook = "playbook.yml"
+      #   ansible.become = "true"
+      # end
     end
   end
 end
