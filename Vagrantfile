@@ -26,6 +26,10 @@ MACHINES = {
           },
 }
 
+ssh_key = `ssh-keygen -t ed25519 -f /tmp/id_ed25519 -N ""`
+public_key = File.read("/tmp/id_ed25519.pub")
+private_key = File.read("/tmp/id_ed25519")
+  
 Vagrant.configure("2") do |config|
   MACHINES.each do |boxname, boxconfig|
     config.vm.synced_folder ".", "/vagrant", disabled: true
@@ -36,31 +40,40 @@ Vagrant.configure("2") do |config|
       box.vm.box_version = boxconfig[:box_version]
       box.vm.host_name = boxname.to_s
 
-      box.vm.provider "libvirt" do |v|
-        v.memory = boxconfig[:memory]
-        v.cpus = boxconfig[:cpus]
+      box.vm.provider "libvirt" do |vm|
+        vm.memory = boxconfig[:memory]
+        vm.cpus = boxconfig[:cpus]
         
-        boxconfig[:disks].each do |dname, dconf|
-          v.storage :file, :size=> dconf[:size], :path => dconf[:path], :device => "hdd", :allow_existing => true
-        #   unless File.exist?(dconf[:dfile])
-        #     v.storage :file, size: dconf[:size]
-        #     # v.customize ['createhd', '--filename', dconf[:dfile], '--variant', 'Fixed', '--size', dconf[:size]]
-        #     needsController =  true
-        #   end
-        #   if needsController == true
-        #     v.storage_controller :sata, port_count: 1, model_type: 'virtio-scsi' # Changed storage controller for libvirt
-        #     # v.customize ["storagectl", :id, "--name", "SATA", "--add", "sata" ]
-        #     boxconfig[:disks].each do |dname, dconf|
-        #       v.storage_attach :disk, device: 0, disk: dconf[:dfile], port: dconf[:port], bus: 'sata' # Changed storage attachment for libvirt
-        #       # v.customize ['storageattach', :id,  '--storagectl', 'SATA', '--port', dconf[:port], '--device', 0, '--type', 'hdd', '--medium', dconf[:dfile]]
-        #     end
-        #   end
-        end
-      end
-      box.vm.provision "shell", inline: <<-SHELL
+        box.vm.provision "shell", inline: <<-SHELL
           sed -i 's/^PasswordAuthentication.*$/PasswordAuthentication no/' $(grep -r 'PasswordAuthentication' /etc/ssh/ | awk '{print $1}' FS=':' | uniq)
           systemctl restart sshd.service
-      SHELL
+          useradd -m -s /bin/bash borg
+          echo borg:'Otus2022!' | sudo chpasswd
+          groupadd -f admin
+          usermod borg -a -G admin && usermod root -a -G admin && usermod vagrant -a -G admin
+          mkdir /home/borg/.ssh
+          echo '#{private_key}' >> /home/borg/.ssh/id_ed25519
+          chown borg /home/borg/.ssh/ 
+          chmod 700 /home/borg/.ssh/
+        SHELL
+        
+        boxconfig[:disks].each do |dname, dconf|
+          vm.storage :file, :size=> dconf[:size], :path => dconf[:path], :device => "hdd", :allow_existing => true
+          box.vm.provision "shell", inline: <<-SHELL
+            dd if=/dev/zero of=/dev/vdb bs=1M count=1024
+            mkfs.ext4 /dev/vdb
+            mkdir -p /var/backup
+            mount /dev/sdb /var/backup
+            chown borg:borg /var/backup/
+            echo '#{public_key}' >> /home/borg/.ssh/authorized_keys
+            chmod 600 /home/borg/.ssh/authorized_keys
+          SHELL
+        end
+      end
+      box.vm.provision "ansible" do |ansible|
+        ansible.playbook = "playbook.yml"
+        ansible.become = "true"
+      end
     end
   end
 end
