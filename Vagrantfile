@@ -34,10 +34,8 @@ Vagrant.configure("2") do |config|
       box.vm.box_version = boxconfig[:box_version]
 
       box.vm.provision "shell", inline: <<-SHELL
-        echo '-------------------------edit ssh start'
         sed -i 's/^PasswordAuthentication.*$/PasswordAuthentication no/' $(grep -r 'PasswordAuthentication' /etc/ssh/ | awk '{print $1}' FS=':' | uniq)
-          echo '-------------------------edited ssh'
-          systemctl restart sshd.service
+        systemctl restart sshd.service
         SHELL
 
       box.vm.provider "libvirt" do |vm|
@@ -47,7 +45,7 @@ Vagrant.configure("2") do |config|
         boxconfig[:disks].each do |dname, dconf|
           vm.storage :file, :size=> dconf[:size], :device => "sda", :allow_existing => true, :bus => "sata"
 
-          box.vm.provision "shell", inline: <<-SHELL
+          box.vm.provision "shell", run: "once", inline: <<-SHELL
             echo '-------------------------mount start'
             mkdir -p /var/backup
             dd if=/dev/zero of=/dev/sda bs=4M 2>/dev/null
