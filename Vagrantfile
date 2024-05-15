@@ -3,14 +3,14 @@
 ENV["LC_ALL"] = "en_US.UTF-8"
 
 MACHINES = {
-  :"backupserver" => {
+  :"client" => {
               :box_name => "generic/ubuntu2204",
               :cpus => 1,
               :memory => 1024,
               :ip => "192.168.56.111",
               :disks => {},
             },
-  :"client" => {
+  :"backupserver" => {
               :box_name => "generic/ubuntu2204",
               :cpus => 1,
               :memory => 1024,
@@ -44,15 +44,6 @@ Vagrant.configure("2") do |config|
         
         boxconfig[:disks].each do |dname, dconf|
           vm.storage :file, :size=> dconf[:size], :device => "sda", :allow_existing => true, :bus => "sata"
-
-          box.vm.provision "shell", run: "once", inline: <<-SHELL
-            echo '-------------------------mount start'
-            mkdir -p /var/backup
-            dd if=/dev/zero of=/dev/sda bs=4M 2>/dev/null
-            mkfs.ext4 /dev/sda 2>/dev/null
-            mount /dev/sda /var/backup
-            echo '-------------------------mounted'
-          SHELL
         end
       end
       # box.vm.provision "ansible" do |ansible|
