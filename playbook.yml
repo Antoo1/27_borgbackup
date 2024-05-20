@@ -9,8 +9,11 @@
         generate_ssh_key: true
         ssh_key_bits: 4096
         ssh_key_type: "ed25519"
-
-    - name: fetch all public ssh keys
+      notify:
+        - fetch client public ssh key
+    
+  handlers:
+    - name: fetch client public ssh key
       fetch:
         src: /home/borg/.ssh/id_ed25519.pub
         dest: /tmp/
@@ -28,13 +31,16 @@
     
     - name: Установка публичного ключа на backupserver
       copy:
-       src: /tmp/public_key/id_ed25519.pub
+       src: /tmp/id_ed25519.pub
        dest: /tmp/
+      notify:
+        - set authorized_key
 
-    - name: set authorized_key
-      authorized_key:
-        user: borg
-        key: "{{ lookup('file', '/tmp/id_ed25519.pub') }}"
+  handlers:
+  - name: set authorized_key
+    authorized_key:
+      user: borg
+      key: "{{ lookup('file', '/tmp/id_ed25519.pub') }}"
 
 
 - name: setup borg client
@@ -85,9 +91,6 @@
         then
           dd if=/dev/zero of="{{ MOUNT_DISK }}" bs=1M
           mkfs.ext4 "{{ MOUNT_DISK }}"
-          echo "made fs ext4 on {{ MOUNT_DISK }}"
-        else 
-          echo "mount disk skiped"
         fi
       notify:
         - mount backup
@@ -99,3 +102,7 @@
         src: "{{ MOUNT_DISK }}"
         fstype: ext4
         state: mounted
+
+- name: setup borg client 
+  vars: 
+    - ENCRIPTION_KEY: ''
