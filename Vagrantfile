@@ -46,10 +46,10 @@ Vagrant.configure("2") do |config|
           vm.storage :file, :size=> dconf[:size], :device => "sda", :allow_existing => true, :bus => "sata"
         end
       end
-      # box.vm.provision "ansible" do |ansible|
-      #   ansible.playbook = "playbook.yml"
-      #   ansible.become = "true"
-      # end
+      box.vm.provision "ansible" do |ansible|
+        ansible.playbook = "playbook.yml"
+        ansible.become = "true"
+      end
     end
   end
 end

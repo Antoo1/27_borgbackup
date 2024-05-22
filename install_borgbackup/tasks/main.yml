@@ -1,0 +1,14 @@
+---
+# tasks file for borg
+
+
+- name: update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 86400
+
+- name: install required
+  ansible.builtin.apt:
+    name:
+      - borgbackup
+    state: present

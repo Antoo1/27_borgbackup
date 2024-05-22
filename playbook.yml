@@ -43,7 +43,7 @@
       key: "{{ lookup('file', '/tmp/id_ed25519.pub') }}"
 
 
-- name: setup borg client
+- name: install borg client
   hosts: client
   become: true
 
@@ -58,8 +58,55 @@
         name: borgbackup
         state: present
 
+- name: install borg client
+  hosts: client
+  become: true
+  become_user: borg
+  vars: 
+    - ENCRIPTION_KEY: 'Otus1234'
+    - BACKUPSERVER_IP: 192.168.56.112
 
-- name: setup borg server
+
+  tasks:
+    # - name: copy borg keyfile
+    #   template:
+    #     src: templates/borg_config.j2
+    #     dest: /home/borg/.config/borg/keys/keyfile
+    #     owner: borg
+    #     mode: 600
+    
+    - name: config ssh
+      template:
+        src: templates/ssh_config.j2
+        dest: /home/borg/.ssh/config
+        owner: borg
+        mode: 600
+    
+    - name: install required
+      shell: |
+        BORG_PASSPHRASE=$ENCRIPTION_KEY borg init --encryption=keyfile borg@$BACKUPSERVER_IP:/var/backup/otus_repo
+  
+  handlers:
+    
+    - name: copy template of borg timer
+      template:
+        src: templates/ssh_config.j2
+        dest: /home/borg/.ssh/config
+        owner: borg
+    
+    - name: copy timer config
+      template:
+        src: templates/borg-backup.timer.j2
+        dest: /etc/systemd/system/borg-backup.timer
+        mode: '0640'
+    
+    - name: copy backup service
+      template:
+        src: templates/borg-backup.timer.j2
+        dest: /etc/systemd/system/borg-backup.service 
+        mode: '0640'
+
+- name: install borg server
   hosts: backupserver
   become: true
 
@@ -102,7 +149,3 @@
         src: "{{ MOUNT_DISK }}"
         fstype: ext4
         state: mounted
-
-- name: setup borg client 
-  vars: 
-    - ENCRIPTION_KEY: ''
