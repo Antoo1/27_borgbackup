@@ -1,4 +1,22 @@
 ---
+- name: install borg client
+  hosts: all
+  become: true
+
+  tasks:
+    - name: update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 86400
+
+    - name: install required
+      apt:
+        name: 
+          - borgbackup
+          - acl
+        state: present
+
+
 - hosts: client
   gather_facts: false
   become: true
@@ -29,7 +47,7 @@
       ansible.builtin.user:
         name: borg
     
-    - name: Установка публичного ключа на backupserver
+    - name: put ssh key to backupserver
       copy:
        src: /tmp/id_ed25519.pub
        dest: /tmp/
@@ -43,88 +61,16 @@
       key: "{{ lookup('file', '/tmp/id_ed25519.pub') }}"
 
 
-- name: install borg client
-  hosts: client
-  become: true
-
-  tasks:
-    - name: update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 86400
-
-    - name: install required
-      apt:
-        name: borgbackup
-        state: present
-
-- name: install borg client
-  hosts: client
-  become: true
-  become_user: borg
-  vars: 
-    - ENCRIPTION_KEY: 'Otus1234'
-    - BACKUPSERVER_IP: 192.168.56.112
-
-
-  tasks:
-    # - name: copy borg keyfile
-    #   template:
-    #     src: templates/borg_config.j2
-    #     dest: /home/borg/.config/borg/keys/keyfile
-    #     owner: borg
-    #     mode: 600
-    
-    - name: config ssh
-      template:
-        src: templates/ssh_config.j2
-        dest: /home/borg/.ssh/config
-        owner: borg
-        mode: 600
-    
-    - name: install required
-      shell: |
-        BORG_PASSPHRASE=$ENCRIPTION_KEY borg init --encryption=keyfile borg@$BACKUPSERVER_IP:/var/backup/otus_repo
-  
-  handlers:
-    
-    - name: copy template of borg timer
-      template:
-        src: templates/ssh_config.j2
-        dest: /home/borg/.ssh/config
-        owner: borg
-    
-    - name: copy timer config
-      template:
-        src: templates/borg-backup.timer.j2
-        dest: /etc/systemd/system/borg-backup.timer
-        mode: '0640'
-    
-    - name: copy backup service
-      template:
-        src: templates/borg-backup.timer.j2
-        dest: /etc/systemd/system/borg-backup.service 
-        mode: '0640'
-
-- name: install borg server
+- name: configure borg server
   hosts: backupserver
   become: true
 
   vars:
-    - BACKUP_DIR: '/var/backup'
+    - BACKUP_DIR: '/var/backup/'
+    - REPO_DIR: '/var/backup/otus_repo/'
     - MOUNT_DISK: '/dev/sda'
 
   tasks:
-    - name: update apt cache
-      apt:
-        update_cache: yes
-        cache_valid_time: 86400
-
-    - name: install required
-      apt:
-        name: borgbackup
-        state: present
-
     - name: create backup directory
       file:
         path: "{{ BACKUP_DIR }}"
@@ -149,3 +95,52 @@
         src: "{{ MOUNT_DISK }}"
         fstype: ext4
         state: mounted
+
+
+- name: configure borg client
+  hosts: client
+  become: true
+  become_user: borg
+
+  vars: 
+    - ENCRIPTION_KEY: 'Otus1234'
+    - BACKUPSERVER_IP: '192.168.56.112'
+    - BACKUP_DIR: '/var/backup/'
+    - REPO_DIR: '/var/backup/otus_repo/'
+
+  tasks:
+    - name: config ssh
+      template:
+        src: install_borgbackup/templates/ssh_config.j2
+        dest: /home/borg/.ssh/config
+        owner: borg
+        mode: '600'
+    
+    - name: init borg repo
+      shell: |
+        BORG_PASSPHRASE=$ENCRIPTION_KEY borg init --encryption=keyfile borg@$BACKUPSERVER_IP:$REPO_DIR
+    
+    - name: copy backup service
+      become: true
+      become_user: root
+      template:
+        src: install_borgbackup/templates/borg-backup.service.j2
+        dest: /etc/systemd/system/borg-backup.service 
+        mode: '640'
+  
+    - name: copy timer config
+      become: true
+      become_user: root
+      template:
+        src: install_borgbackup/templates/borg-backup.timer.j2
+        dest: /etc/systemd/system/borg-backup.timer
+        mode: '640'
+      notify:
+        - restart borg-backup timer
+
+  handlers:
+    - name: restart borg-backup timer
+      systemd:
+        name: borg-backup.timer
+        state: restarted
+        enabled: yes

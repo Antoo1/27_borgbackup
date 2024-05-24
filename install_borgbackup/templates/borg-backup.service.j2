@@ -4,17 +4,10 @@ Description=Borg Backup
 [Service]
 Type=oneshot
 
-# Парольная фраза
-Environment=BORG_KEY_FILE=/home/borg/.config/borg/keys/keyfile
-# Репозиторий
-Environment=REPO=borg@{{ BACKUPSERVER_IP }}:/var/backup/otus_repo/
-# Что бэкапим
-Environment=BACKUP_TARGET=/etc
-
+Environment=BORG_PASSPHRASE={{ ENCRIPTION_KEY }}
+Environment=REPO={{ REPO_DIR }}
 # Создание бэкапа
-ExecStart=/bin/borg create \
-    --stats                \
-    ${REPO}::etc-{now:%%Y-%%m-%%d_%%H:%%M:%%S} ${BACKUP_TARGET}
+ExecStart=/bin/bash /etc/systemd/system/borg_backup_create.sh
 
 # Проверка бэкапа
 ExecStart=/bin/borg check ${REPO}
