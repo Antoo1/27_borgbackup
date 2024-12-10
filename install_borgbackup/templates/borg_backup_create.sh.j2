@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Репозиторий
+export REPO=borg@{{ BACKUPSERVER_IP }}:{{ REPO_DIR }}
+# Что бэкапим
+export BACKUP_TARGET=/etc
+
+/bin/borg create --stats ${REPO}::etc-{now:%%Y-%%m-%%d_%%H:%%M:%%S} ${BACKUP_TARGET}

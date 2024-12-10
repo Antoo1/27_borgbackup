@@ -1,0 +1,3 @@
+[web]
+backupserver ansible_host=192.168.56.112 ansible_port=22 ansible_private_key_file=.vagrant/machines/backupserver/libvirt/private_key
+client ansible_host=192.168.56.111 ansible_port=22 ansible_private_key_file=.vagrant/machines/client/libvirt/private_key

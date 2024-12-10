@@ -1,0 +1,20 @@
+[Unit]
+Description=Borg Backup
+
+[Service]
+Type=oneshot
+
+Environment=BORG_PASSPHRASE={{ ENCRIPTION_KEY }}
+Environment=REPO={{ REPO_DIR }}
+# Создание бэкапа
+ExecStart=/bin/bash /etc/systemd/system/borg_backup_create.sh
+
+# Проверка бэкапа
+ExecStart=/bin/borg check ${REPO}
+
+# Очистка старых бэкапов
+ExecStart=/bin/borg prune \
+    --keep-daily  90      \
+    --keep-monthly 12     \
+    --keep-yearly  1       \
+    ${REPO}
